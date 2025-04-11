@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel de Monitoramento de Matrículas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4f46e5',
+                        secondary: '#10b981',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                        info: '#3b82f6'
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .progress-bar {
+            height: 8px;
+            border-radius: 4px;
+            background-color: #e5e7eb;
+            overflow: hidden;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            transition: width 0.5s ease;
+        }
+        
+        .document-card {
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent;
+        }
+        
+        .document-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .valid {
+            border-left-color: #10b981;
+        }
+        
+        .invalid {
+            border-left-color: #ef4444;
+        }
+        
+        .alert {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .glow {
+            box-shadow: 0 0 10px rgba(79, 70, 229, 0.5);
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+        
+        .stat-card {
+            grid-column: span 3;
+        }
+        
+        @media (max-width: 1280px) {
+            .stat-card {
+                grid-column: span 6;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .stat-card {
+                grid-column: span 12;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-3xl font-bold text-gray-800">Painel de Matrículas </h1>
+                    <p class="text-gray-600">Monitoramento em tempo real</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-search text-gray-400"></i>
+                        </div>
+                        <input type="text" class="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="Buscar candidato...">
+                    </div>
+                    <button class="bg-primary text-white px-4 py-2 rounded-lg hover:bg-opacity-90 transition">
+                        <i class="fas fa-cog mr-2"></i> Configurações
+                    </button>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Status Bar -->
+        <div class="bg-white rounded-xl shadow p-6 mb-8">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold text-gray-800">Status do Processamento</h2>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-500">Última atualização:</span>
+                    <span class="text-sm font-medium" id="last-update">Carregando...</span>
+                    <button id="refresh-btn" class="text-primary hover:text-primary-dark transition">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">Documentos processados</span>
+                        <span class="text-primary font-bold" id="processed-count">0</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill bg-primary" style="width: 0%" id="processed-bar"></div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">Documentos válidos</span>
+                        <span class="text-secondary font-bold" id="valid-count">0</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill bg-secondary" style="width: 0%" id="valid-bar"></div>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-gray-600">Confiança média</span>
+                        <span class="text-info font-bold" id="confidence-avg">0%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-bar-fill bg-info" style="width: 0%" id="confidence-bar"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Main Dashboard -->
+        <div class="dashboard-grid mb-8">
+            <!-- Candidates Processed -->
+            <div class="stat-card bg-white rounded-xl shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Candidatos Processados</h3>
+                    <div class="bg-primary bg-opacity-10 p-2 rounded-full">
+                        <i class="fas fa-users text-primary"></i>
+                    </div>
+                </div>
+                <div class="text-3xl font-bold text-gray-800 mb-2" id="candidates-count">0</div>
+                <div class="flex items-center text-sm text-gray-500">
+                    <span id="candidates-change" class="mr-1">0</span>
+                    <span>desde ontem</span>
+                </div>
+            </div>
+            
+            <!-- Document Types -->
+            <div class="stat-card bg-white rounded-xl shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Tipos de Documentos</h3>
+                    <div class="bg-secondary bg-opacity-10 p-2 rounded-full">
+                        <i class="fas fa-file-alt text-secondary"></i>
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-600">RG</span>
+                            <span class="font-medium" id="rg-count">0 (0%)</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill bg-blue-400" style="width: 0%" id="rg-bar"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-600">CPF</span>
+                            <span class="font-medium" id="cpf-count">0 (0%)</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill bg-purple-400" style="width: 0%" id="cpf-bar"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span class="text-gray-600">Histórico</span>
+                            <span class="font-medium" id="history-count">0 (0%)</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-bar-fill bg-green-400" style="width: 0%" id="history-bar"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Confidence Distribution -->
+            <div class="stat-card bg-white rounded-xl shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Distribuição de Confiança</h3>
+                    <div class="bg-info bg-opacity-10 p-2 rounded-full">
+                        <i class="fas fa-chart-line text-info"></i>
+                    </div>
+                </div>
+                <div class="h-40 relative">
+                    <canvas id="confidenceChart"></canvas>
+                </div>
+                <div class="mt-4 text-sm text-gray-600">
+                    <div class="flex justify-between">
+                        <span>Baixa (<70%)</span>
+                        <span id="low-confidence">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Média (70-90%)</span>
+                        <span id="medium-confidence">0</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Alta (>90%)</span>
+                        <span id="high-confidence">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Alerts -->
+            <div class="stat-card bg-white rounded-xl shadow p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Alertas</h3>
+                    <div class="bg-danger bg-opacity-10 p-2 rounded-full">
+                        <i class="fas fa-exclamation-triangle text-danger"></i>
+                    </div>
+                </div>
+                <div class="space-y-3">
+                    <div class="flex items-center p-3 bg-red-50 rounded-lg">
+                        <div class="mr-3 text-red-500">
+                            <i class="fas fa-exclamation-circle"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium" id="duplicate-cpf">CPF duplicados: 0</p>
+                            <p class="text-xs text-red-600">Verificar possíveis fraudes</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center p-3 bg-yellow-50 rounded-lg">
+                        <div class="mr-3 text-yellow-500">
+                            <i class="fas fa-exclamation-circle"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium" id="incomplete-data">Dados incompletos: 0</p>
+                            <p class="text-xs text-yellow-600">Contatar candidatos</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center p-3 bg-blue-50 rounded-lg">
+                        <div class="mr-3 text-blue-500">
+                            <i class="fas fa-exclamation-circle"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium" id="low-confidence-alert">Baixa confiança: 0</p>
+                            <p class="text-xs text-blue-600">Revisão manual necessária</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Documents -->
+        <div class="bg-white rounded-xl shadow p-6 mb-8">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold text-gray-800">Documentos Recentes</h2>
+                <div class="flex space-x-2">
+                    <button class="px-3 py-1 border rounded-lg text-sm bg-primary text-white hover:bg-opacity-90 transition">Todos</button>
+                    <button class="px-3 py-1 border rounded-lg text-sm hover:bg-gray-50 transition">Válidos</button>
+                    <button class="px-3 py-1 border rounded-lg text-sm hover:bg-gray-50 transition">Inválidos</button>
+                    
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Candidato</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Confiança</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="documents-table">
+                        <!-- Documents will be loaded here -->
+                        <tr class="document-card valid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Ana Silva</div>
+                                        <div class="text-xs text-gray-500">Doc. 123456789</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">RG</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Válido
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-green-500 font-bold">95%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-green-500" style="width: 95%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                10/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card invalid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Carlos Oliveira</div>
+                                        <div class="text-xs text-gray-500">CPF 987654321</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">CPF</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                    Inválido
+                                </span>
+                                <div class="text-xs text-gray-500 mt-1">CPF duplicado</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-red-500 font-bold">45%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-red-500" style="width: 45%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                09/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card valid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Mariana Santos</div>
+                                        <div class="text-xs text-gray-500">Doc. 456789123</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">Histórico Escolar</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Válido
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-green-500 font-bold">92%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-green-500" style="width: 92%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                09/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card invalid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Pedro Souza</div>
+                                        <div class="text-xs text-gray-500">Doc. 654321987</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">Comprovante de Residência</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                    Inválido
+                                </span>
+                                <div class="text-xs text-gray-500 mt-1">Dados incompletos</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-yellow-500 font-bold">68%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-yellow-500" style="width: 68%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                08/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card valid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Juliana Costa</div>
+                                        <div class="text-xs text-gray-500">CPF 321654987</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">CPF</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Válido
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-green-500 font-bold">98%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-green-500" style="width: 98%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                08/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card invalid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Lucas Pereira</div>
+                                        <div class="text-xs text-gray-500">Doc. 789123456</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">Certidão de Nascimento</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                    Inválido
+                                </span>
+                                <div class="text-xs text-gray-500 mt-1">Imagem ilegível</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-red-500 font-bold">32%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-red-500" style="width: 32%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                07/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card valid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Fernanda Almeida</div>
+                                        <div class="text-xs text-gray-500">Doc. 159753468</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">RG</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Válido
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-green-500 font-bold">89%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-green-500" style="width: 89%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                07/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card invalid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Rafael Lima</div>
+                                        <div class="text-xs text-gray-500">CPF 357159468</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">CPF</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                                    Inválido
+                                </span>
+                                <div class="text-xs text-gray-500 mt-1">Documento vencido</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-yellow-500 font-bold">75%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-yellow-500" style="width: 75%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                06/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card valid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Patrícia Rocha</div>
+                                        <div class="text-xs text-gray-500">Doc. 852963741</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">Histórico Escolar</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Válido
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-green-500 font-bold">96%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-green-500" style="width: 96%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                06/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="document-card valid">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="flex items-center">
+                                    <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-500"></i>
+                                    </div>
+                                    <div class="ml-4">
+                                        <div class="text-sm font-medium text-gray-900">Bruno Carvalho</div>
+                                        <div class="text-xs text-gray-500">Doc. 753951486</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-gray-900">Comprovante de Residência</div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                    Válido
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <div class="text-sm text-green-500 font-bold">91%</div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="h-1.5 rounded-full bg-green-500" style="width: 91%"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                05/05/2023
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <button class="text-primary hover:text-primary-dark mr-3">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="text-blue-500 hover:text-blue-700">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-4 flex justify-between items-center">
+                <div class="text-sm text-gray-500">
+                    Mostrando <span id="showing-from">1</span> a <span id="showing-to">10</span> de <span id="total-documents">25</span> documentos
+                </div>
+                <div class="flex space-x-2">
+                    <button class="px-3 py-1 border rounded-lg text-sm hover:bg-gray-50 transition disabled:opacity-50" disabled id="prev-page">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <button class="px-3 py-1 border rounded-lg text-sm hover:bg-gray-50 transition" id="next-page">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Confidence Heatmap -->
+        <div class="bg-white rounded-xl shadow p-6">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-semibold text-gray-800">Mapa de Calor de Confiança</h2>
+                <div class="text-sm text-gray-500">
+                    <span class="font-medium">Legenda:</span>
+                    <span class="inline-block w-3 h-3 ml-2 bg-red-400 rounded-sm"></span> Baixa
+                    <span class="inline-block w-3 h-3 ml-2 bg-yellow-400 rounded-sm"></span> Média
+                    <span class="inline-block w-3 h-3 ml-2 bg-green-400 rounded-sm"></span> Alta
+                </div>
+            </div>
+            <div class="h-64">
+                <canvas id="heatmapChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script>
+        // Simulate real-time data updates
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize charts
+            const confidenceCtx = document.getElementById('confidenceChart').getContext('2d');
+            const heatmapCtx = document.getElementById('heatmapChart').getContext('2d');
+            
+            const confidenceChart = new Chart(confidenceCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Baixa (<70%)', 'Média (70-90%)', 'Alta (>90%)'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: [
+                            '#ef4444',
+                            '#f59e0b',
+                            '#10b981'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 10,
+                                padding: 20
+                            }
+                        }
+                    }
+                }
+            });
+            
+            const heatmapChart = new Chart(heatmapCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+                    datasets: [{
+                        label: 'Baixa confiança',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: '#ef4444'
+                    }, {
+                        label: 'Média confiança',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: '#f59e0b'
+                    }, {
+                        label: 'Alta confiança',
+                        data: [0, 0, 0, 0, 0, 0, 0],
+                        backgroundColor: '#10b981'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: {
+                                display: false
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 10,
+                                padding: 20
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // List of realistic Brazilian names
+            const brazilianNames = [
+                'Ana Silva', 'Carlos Oliveira', 'Mariana Santos', 'Pedro Souza', 'Juliana Costa',
+                'Lucas Pereira', 'Fernanda Almeida', 'Rafael Lima', 'Patrícia Rocha', 'Bruno Carvalho',
+                'Amanda Gomes', 'Rodrigo Martins', 'Tatiane Ribeiro', 'Diego Ferreira', 'Camila Pinto',
+                'Gabriel Castro', 'Isabela Dias', 'Marcos Nunes', 'Larissa Moreira', 'Thiago Correia'
+            ];
+            
+            // List of realistic document issues
+            const documentIssues = [
+                'CPF duplicado', 'Dados incompletos', 'Imagem ilegível', 'Assinatura ausente',
+                'Documento vencido', 'Foto não corresponde', 'Informações inconsistentes',
+                'Documento rasurado', 'Cópia não autenticada', 'Data de emissão inválida'
+            ];
+            
+            // Function to generate realistic document data
+            function generateRealisticDocument() {
+                const types = ['RG', 'CPF', 'Histórico Escolar', 'Comprovante de Residência', 'Certidão de Nascimento'];
+                const statuses = ['Válido', 'Inválido'];
+                
+                // Generate random date in the last 7 days
+                const date = new Date();
+                date.setDate(date.getDate() - Math.floor(Math.random() * 7));
+                
+                // Generate confidence based on status (valid docs tend to have higher confidence)
+                let confidence, status, reason = '';
+                
+                if (Math.random() > 0.3) { // 70% chance of valid document
+                    status = 'Válido';
+                    confidence = Math.floor(Math.random() * 25) + 75; // 75-100%
+                } else {
+                    status = 'Inválido';
+                    confidence = Math.floor(Math.random() * 40) + 30; // 30-70%
+                    reason = documentIssues[Math.floor(Math.random() * documentIssues.length)];
+                }
+                
+                // Occasionally adjust confidence to create more variation
+                if (Math.random() > 0.7) {
+                    confidence = Math.min(100, Math.max(0, confidence + (Math.random() * 20 - 10)));
+                }
+                
+                return {
+                    candidate: brazilianNames[Math.floor(Math.random() * brazilianNames.length)],
+                    type: types[Math.floor(Math.random() * types.length)],
+                    status: status,
+                    confidence: confidence,
+                    date: date.toLocaleDateString('pt-BR'),
+                    reason: reason
+                };
+            }
+            
+            // Generate initial data with realistic documents
+            let documents = Array.from({length: 50}, generateRealisticDocument);
+            
+            // Add some duplicates for realism
+            for (let i = 0; i < 5; i++) {
+                const duplicateDoc = {...documents[Math.floor(Math.random() * documents.length)]};
+                duplicateDoc.reason = 'CPF duplicado';
+                duplicateDoc.status = 'Inválido';
+                duplicateDoc.confidence = Math.floor(Math.random() * 30) + 40;
+                documents.push(duplicateDoc);
+            }
+            
+            // Update UI with initial data
+            updateDashboard();
+            
+            // Simulate real-time updates
+            setInterval(() => {
+                // Add new documents occasionally
+                if (Math.random() > 0.7) {
+                    const newDocs = Array.from({length: Math.floor(Math.random() * 3) + 1}, generateRealisticDocument);
+                    documents = [...newDocs, ...documents];
+                }
+                
+                // Update random documents' confidence
+                documents.forEach(doc => {
+                    if (Math.random() > 0.8) {
+                        doc.confidence = Math.min(100, Math.max(0, doc.confidence + (Math.random() * 20 - 10)));
+                        // If confidence drops below 70%, mark as invalid if not already
+                        if (doc.confidence < 70 && doc.status === 'Válido' && Math.random() > 0.5) {
+                            doc.status = 'Inválido';
+                            doc.reason = documentIssues[Math.floor(Math.random() * documentIssues.length)];
+                        }
+                    }
+                });
+                
+                updateDashboard();
+            }, 3000);
+            
+            // Refresh button
+            document.getElementById('refresh-btn').addEventListener('click', updateDashboard);
+            
+            // Pagination
+            let currentPage = 1;
+            const docsPerPage = 10;
+            
+            document.getElementById('next-page').addEventListener('click', () => {
+                currentPage++;
+                updateDocumentsTable();
+            });
+            
+            document.getElementById('prev-page').addEventListener('click', () => {
+                currentPage = Math.max(1, currentPage - 1);
+                updateDocumentsTable();
+            });
+            
+            // Main update function
+            function updateDashboard() {
+                // Update last update time
+                document.getElementById('last-update').textContent = new Date().toLocaleTimeString('pt-BR');
+                
+                // Calculate metrics
+                const totalDocs = documents.length;
+                const validDocs = documents.filter(doc => doc.status === 'Válido').length;
+                const invalidDocs = totalDocs - validDocs;
+                const avgConfidence = documents.reduce((sum, doc) => sum + doc.confidence, 0) / totalDocs;
+                
+                const rgDocs = documents.filter(doc => doc.type === 'RG').length;
+                const cpfDocs = documents.filter(doc => doc.type === 'CPF').length;
+                const historyDocs = documents.filter(doc => doc.type === 'Histórico Escolar').length;
+                
+                const lowConfidence = documents.filter(doc => doc.confidence < 70).length;
+                const mediumConfidence = documents.filter(doc => doc.confidence >= 70 && doc.confidence <= 90).length;
+                const highConfidence = documents.filter(doc => doc.confidence > 90).length;
+                
+                const duplicateCpf = documents.filter(doc => doc.reason === 'CPF duplicado').length;
+                const incompleteData = documents.filter(doc => doc.reason === 'Dados incompletos').length;
+                
+                // Update stats
+                document.getElementById('processed-count').textContent = totalDocs;
+                document.getElementById('processed-bar').style.width = `${Math.min(100, totalDocs / 100)}%`;
+                
+                document.getElementById('valid-count').textContent = validDocs;
+                document.getElementById('valid-bar').style.width = `${(validDocs / totalDocs) * 100}%`;
+                
+                document.getElementById('confidence-avg').textContent = `${avgConfidence.toFixed(1)}%`;
+                document.getElementById('confidence-bar').style.width = `${avgConfidence}%`;
+                
+                document.getElementById('candidates-count').textContent = new Set(documents.map(doc => doc.candidate)).size;
+                
+                document.getElementById('rg-count').textContent = `${rgDocs} (${((rgDocs / totalDocs) * 100).toFixed(1)}%)`;
+                document.getElementById('rg-bar').style.width = `${(rgDocs / totalDocs) * 100}%`;
+                
+                document.getElementById('cpf-count').textContent = `${cpfDocs} (${((cpfDocs / totalDocs) * 100).toFixed(1)}%)`;
+                document.getElementById('cpf-bar').style.width = `${(cpfDocs / totalDocs) * 100}%`;
+                
+                document.getElementById('history-count').textContent = `${historyDocs} (${((historyDocs / totalDocs) * 100).toFixed(1)}%)`;
+                document.getElementById('history-bar').style.width = `${(historyDocs / totalDocs) * 100}%`;
+                
+                document.getElementById('low-confidence').textContent = lowConfidence;
+                document.getElementById('medium-confidence').textContent = mediumConfidence;
+                document.getElementById('high-confidence').textContent = highConfidence;
+                
+                document.getElementById('duplicate-cpf').textContent = `CPF duplicados: ${duplicateCpf}`;
+                document.getElementById('incomplete-data').textContent = `Dados incompletos: ${incompleteData}`;
+                document.getElementById('low-confidence-alert').textContent = `Baixa confiança: ${lowConfidence}`;
+                
+                // Update charts
+                confidenceChart.data.datasets[0].data = [lowConfidence, mediumConfidence, highConfidence];
+                confidenceChart.update();
+                
+                // Generate realistic heatmap data for the week
+                const today = new Date();
+                const dayOfWeek = today.getDay(); // 0 (Domingo) a 6 (Sábado)
+                
+                // Generate more activity on weekdays (Monday to Friday)
+                const weekData = Array(7).fill(0).map((_, i) => {
+                    const dayOffset = (i - dayOfWeek + 7) % 7;
+                    const dayDate = new Date(today);
+                    dayDate.setDate(today.getDate() - dayOffset);
+                    
+                    // Count documents for this day
+                    const dayDocs = documents.filter(doc => {
+                        const docDate = new Date(doc.date.split('/').reverse().join('-'));
+                        return docDate.toDateString() === dayDate.toDateString();
+                    });
+                    
+                    // Weekdays typically have more activity
+                    const isWeekday = i >= 1 && i <= 5;
+                    const baseMultiplier = isWeekday ? 2 : 1;
+                    
+                    return {
+                        low: Math.floor(dayDocs.filter(doc => doc.confidence < 70).length * baseMultiplier),
+                        medium: Math.floor(dayDocs.filter(doc => doc.confidence >= 70 && doc.confidence <= 90).length * baseMultiplier),
+                        high: Math.floor(dayDocs.filter(doc => doc.confidence > 90).length * baseMultiplier)
+                    };
+                });
+                
+                // Ensure we have some data even if no documents exist for those days
+                weekData.forEach((day, i) => {
+                    if (day.low === 0 && day.medium === 0 && day.high === 0) {
+                        const isWeekday = i >= 1 && i <= 5;
+                        const baseValue = isWeekday ? Math.floor(Math.random() * 5) + 3 : Math.floor(Math.random() * 3);
+                        
+                        day.low = Math.floor(baseValue * 0.3);
+                        day.medium = Math.floor(baseValue * 0.5);
+                        day.high = Math.floor(baseValue * 0.2);
+                    }
+                });
+                
+                heatmapChart.data.datasets[0].data = weekData.map(d => d.low);
+                heatmapChart.data.datasets[1].data = weekData.map(d => d.medium);
+                heatmapChart.data.datasets[2].data = weekData.map(d => d.high);
+                heatmapChart.update();
+                
+                // Update documents table
+                updateDocumentsTable();
+            }
+            
+            function updateDocumentsTable() {
+                const startIdx = (currentPage - 1) * docsPerPage;
+                const endIdx = startIdx + docsPerPage;
+                const paginatedDocs = documents.slice(startIdx, endIdx);
+                
+                const tableBody = document.getElementById('documents-table');
+                tableBody.innerHTML = '';
+                
+                paginatedDocs.forEach(doc => {
+                    const row = document.createElement('tr');
+                    row.className = 'document-card ' + (doc.status === 'Válido' ? 'valid' : 'invalid');
+                    
+                    const confidenceColor = doc.confidence < 70 ? 'text-red-500' : 
+                                          doc.confidence < 90 ? 'text-yellow-500' : 'text-green-500';
+                    
+                    row.innerHTML = `
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="flex items-center">
+                                <div class="flex-shrink-0 h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                    <i class="fas fa-user text-gray-500"></i>
+                                </div>
+                                <div class="ml-4">
+                                    <div class="text-sm font-medium text-gray-900">${doc.candidate}</div>
+                                    <div class="text-xs text-gray-500">${doc.type.includes('CPF') ? 'CPF' : 'Doc.'} ${Math.floor(Math.random() * 900000000) + 100000000}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm text-gray-900">${doc.type}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${doc.status === 'Válido' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                ${doc.status}
+                            </span>
+                            ${doc.reason ? `<div class="text-xs text-gray-500 mt-1">${doc.reason}</div>` : ''}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <div class="text-sm ${confidenceColor} font-bold">${doc.confidence}%</div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                <div class="h-1.5 rounded-full ${confidenceColor.replace('text', 'bg')}" style="width: ${doc.confidence}%"></div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${doc.date}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <button class="text-primary hover:text-primary-dark mr-3">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="text-blue-500 hover:text-blue-700">
+                                <i class="fas fa-download"></i>
+                            </button>
+                        </td>
+                    `;
+                    
+                    tableBody.appendChild(row);
+                });
+                
+                // Update pagination info
+                document.getElementById('showing-from').textContent = startIdx + 1;
+                document.getElementById('showing-to').textContent = Math.min(endIdx, documents.length);
+                document.getElementById('total-documents').textContent = documents.length;
+                
+                // Update pagination buttons
+                document.getElementById('prev-page').disabled = currentPage === 1;
+                document.getElementById('next-page').disabled = endIdx >= documents.length;
+            }
+        });
+    </script>
+</body>
+</html>
